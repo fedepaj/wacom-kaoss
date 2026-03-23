@@ -1,12 +1,8 @@
 # Wacom Kaoss Pad — Configuration
 
-# ─── USB ──────────────────────────────────────────────
+# ─── USB (hidapi, no sudo) ────────────────────────────
 WACOM_VID = 0x056A
 WACOM_PID = 0x00D1  # CTH-460 Bamboo Pen & Touch
-TOUCH_EP = 0x82
-PEN_EP = 0x81
-TOUCH_IFACE = 1
-INIT_IFACE = 0  # SET_REPORT goes to iface 0
 
 # Touch resolution (from real device testing)
 TOUCH_X_MAX = 480

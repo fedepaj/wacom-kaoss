@@ -2,9 +2,10 @@
 """
 Wacom Kaoss Pad — Turn a Wacom CTH-460 into a Kaoss Pad for Ableton Live.
 
-2 fingers, each with independent XY CC pairs. ExpressKeys switch layers.
+2 fingers, independent XY CC pairs. ExpressKeys switch layers.
+Uses hidapi (no sudo needed).
 
-REQUIRES SUDO: sudo .venv/bin/python kaoss.py
+Usage: python kaoss.py
 """
 
 import math
@@ -13,12 +14,11 @@ import struct
 import sys
 import time
 
+import hid
 import rtmidi
-import usb.core
-import usb.util
 
 from config import (
-    WACOM_VID, WACOM_PID, TOUCH_EP, TOUCH_IFACE, INIT_IFACE,
+    WACOM_VID, WACOM_PID,
     TOUCH_X_MAX, TOUCH_Y_MAX,
     MIDI_CHANNEL, TOUCH_GATE_CC,
     LAYERS, BUTTON_MASK, CURVES, EXP_CURVE_POWER,
@@ -36,57 +36,53 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-# ─── USB ──────────────────────────────────────────────
+# ─── USB via hidapi ──────────────────────────────────
 
 def open_wacom():
-    dev = usb.core.find(idVendor=WACOM_VID, idProduct=WACOM_PID)
-    if dev is None:
-        dev = usb.core.find(idVendor=WACOM_VID)
-    if dev is None:
-        print("Wacom non trovato! Collegalo via USB.")
+    """Find CTH-460, open iface=0 for init, iface=1 for touch read."""
+    devices = hid.enumerate(WACOM_VID, 0)
+    if not devices:
+        devices = [d for d in hid.enumerate() if d["vendor_id"] == WACOM_VID]
+    if not devices:
+        print("  Wacom non trovato! Collegalo via USB.")
         sys.exit(1)
 
-    print(f"  Device: {dev.manufacturer} {dev.product}")
+    iface0_path = None
+    iface1_path = None
+    for d in devices:
+        if d["interface_number"] == 0 and iface0_path is None:
+            iface0_path = d["path"]
+        elif d["interface_number"] == 1 and iface1_path is None:
+            iface1_path = d["path"]
 
-    cfg = dev.get_active_configuration()
-    for intf in cfg:
-        n = intf.bInterfaceNumber
-        try:
-            if dev.is_kernel_driver_active(n):
-                dev.detach_kernel_driver(n)
-        except Exception:
-            pass
-        try:
-            usb.util.claim_interface(dev, n)
-        except usb.core.USBError as e:
-            print(f"  Claim iface {n} failed: {e}")
-            sys.exit(1)
+    if not iface0_path or not iface1_path:
+        print("  Errore: non trovo entrambe le interfacce USB.")
+        sys.exit(1)
 
-    # Initialize touch
+    # Init touch via iface=0
+    dev_init = hid.device()
+    dev_init.open_path(iface0_path)
     try:
-        dev.ctrl_transfer(0x21, 0x09, 0x0302, INIT_IFACE, bytes([0x02, 0x02]), 1000)
-        print("  Touch initialized")
-    except usb.core.USBError:
+        dev_init.send_feature_report(bytes([0x02, 0x02]))
+        print("  Touch initialized (mode 2)")
+    except IOError:
         try:
-            dev.ctrl_transfer(0x21, 0x09, 0x0302, INIT_IFACE, bytes([0x02, 0x03]), 1000)
+            dev_init.send_feature_report(bytes([0x02, 0x03]))
             print("  Touch initialized (mode 3)")
-        except usb.core.USBError:
-            print("  WARNING: touch init failed")
+        except IOError as e:
+            print(f"  WARNING: touch init failed: {e}")
+    dev_init.close()
 
+    # Open iface=1 for reading
+    dev = hid.device()
+    dev.open_path(iface1_path)
+    dev.set_nonblocking(True)
+    print("  Touch interface open")
     return dev
 
 
-def close_wacom(dev):
-    cfg = dev.get_active_configuration()
-    for intf in cfg:
-        try:
-            usb.util.release_interface(dev, intf.bInterfaceNumber)
-            dev.attach_kernel_driver(intf.bInterfaceNumber)
-        except Exception:
-            pass
-
-
 def parse_touch(data):
+    """Parse 20-byte Bamboo touch report."""
     if len(data) < 20 or data[0] != 0x02:
         return None, None, 0
 
@@ -153,7 +149,7 @@ def get_active_layer(buttons):
     return 'base'
 
 
-# ─── MAIN LOOP ───────────────────────────────────────
+# ─── MAIN ────────────────────────────────────────────
 
 def main():
     print()
@@ -166,33 +162,32 @@ def main():
     midi = open_midi()
     print()
 
-    # Per-finger state
     was_touching = [False, False]
     last_cc = [{'x': -1, 'y': -1}, {'x': -1, 'y': -1}]
     last_layer = 'base'
 
-    print("  Ready! 2 dita indipendenti. Bottoni = layer switch.")
-    print("  Ctrl+C per uscire.\n")
+    print("  Ready! Ctrl+C per uscire.\n")
     print(f"  {'LAYER':<18} {'F0 X':>5} {'Y':>5} {'CCx=v':>7} {'CCy=v':>7}  "
           f"{'F1 X':>5} {'Y':>5} {'CCx=v':>7} {'CCy=v':>7}")
-    print("  " + "─" * 80)
+    print("  " + "-" * 80)
+
+    no_data_count = 0
 
     while running:
-        try:
-            data = dev.read(TOUCH_EP, 64, timeout=50)
-        except usb.core.USBTimeoutError:
-            # Timeout = no touch data, send gate off for any active finger
-            for fi in range(2):
-                if was_touching[fi]:
-                    send_cc(midi, TOUCH_GATE_CC[fi], 0)
-                    was_touching[fi] = False
-                    last_cc[fi] = {'x': -1, 'y': -1}
-            continue
-        except usb.core.USBError:
-            continue
+        data = dev.read(64, timeout_ms=50)
 
         if not data:
+            no_data_count += 1
+            # After ~100ms of no data, consider fingers lifted
+            if no_data_count > 2:
+                for fi in range(2):
+                    if was_touching[fi]:
+                        send_cc(midi, TOUCH_GATE_CC[fi], 0)
+                        was_touching[fi] = False
+                        last_cc[fi] = {'x': -1, 'y': -1}
             continue
+
+        no_data_count = 0
 
         finger0, finger1, buttons = parse_touch(list(data))
         if finger0 is None:
@@ -205,21 +200,18 @@ def main():
 
         for fi in range(2):
             finger = fingers[fi]
-            fkey = f'f{fi}'
-            f_cfg = layer_cfg[fkey]
+            f_cfg = layer_cfg[f'f{fi}']
             cc_x_num = f_cfg['cc_x']
             cc_y_num = f_cfg['cc_y']
 
             if finger[0]:  # Touch active
                 x_raw, y_raw = finger[1], finger[2]
-
                 x_norm = max(0.0, min(1.0, x_raw / TOUCH_X_MAX))
                 y_norm = max(0.0, min(1.0, 1.0 - (y_raw / TOUCH_Y_MAX)))
 
                 cc_x_val = apply_curve(x_norm, cc_x_num)
                 cc_y_val = apply_curve(y_norm, cc_y_num)
 
-                # Send CCs (only on change or layer switch)
                 if cc_x_val != last_cc[fi]['x'] or layer != last_layer:
                     send_cc(midi, cc_x_num, cc_x_val)
                     last_cc[fi]['x'] = cc_x_val
@@ -227,7 +219,6 @@ def main():
                     send_cc(midi, cc_y_num, cc_y_val)
                     last_cc[fi]['y'] = cc_y_val
 
-                # Touch gate
                 if not was_touching[fi]:
                     send_cc(midi, TOUCH_GATE_CC[fi], 127)
                     was_touching[fi] = True
@@ -236,7 +227,6 @@ def main():
                     f"{x_raw:>5} {y_raw:>5} "
                     f"CC{cc_x_num:>2}={cc_x_val:<3} CC{cc_y_num:>2}={cc_y_val:<3} ")
             else:
-                # Finger lifted
                 if was_touching[fi]:
                     send_cc(midi, TOUCH_GATE_CC[fi], 0)
                     was_touching[fi] = False
@@ -252,7 +242,7 @@ def main():
         if was_touching[fi]:
             send_cc(midi, TOUCH_GATE_CC[fi], 0)
     midi.close_port()
-    close_wacom(dev)
+    dev.close()
     print("  Done.")
 
 
