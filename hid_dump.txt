@@ -1,0 +1,252 @@
+WACOM CTH-460 HID DUMP
+Date: 2026-03-22 22:04:12
+
+
+============================================================
+INTERFACE [0] VENDOR (usage_page=0xFF00 usage=0x0001 iface=1)
+============================================================
+
+--- IDLE: NON toccare niente. Mani lontane.
+  (nessun report)
+
+--- TOUCH: Trascina il dito LENTAMENTE da alto-sx a basso-dx.
+  (nessun report)
+
+--- TAP: Tocca e solleva il dito 5 volte (tap tap tap).
+  (nessun report)
+
+--- BTN1: Premi e TIENI solo BOTTONE 1. NON toccare.
+  (nessun report)
+
+--- BTN4: Premi e TIENI solo BOTTONE 4. NON toccare.
+  (nessun report)
+
+--- BTN+TOUCH: Tieni BOTTONE 1 e trascina il dito.
+  (nessun report)
+
+============================================================
+INTERFACE [1] FINGER (usage_page=0x000D usage=0x0022 iface=1)
+============================================================
+
+--- IDLE: NON toccare niente. Mani lontane.
+  (nessun report)
+
+--- TOUCH: Trascina il dito LENTAMENTE da alto-sx a basso-dx.
+  (nessun report)
+
+--- TAP: Tocca e solleva il dito 5 volte (tap tap tap).
+  (nessun report)
+
+--- BTN1: Premi e TIENI solo BOTTONE 1. NON toccare.
+  (nessun report)
+
+--- BTN4: Premi e TIENI solo BOTTONE 4. NON toccare.
+  (nessun report)
+
+--- BTN+TOUCH: Tieni BOTTONE 1 e trascina il dito.
+  (nessun report)
+
+============================================================
+INTERFACE [2] MOUSE (usage_page=0x0001 usage=0x0002 iface=0)
+============================================================
+
+--- IDLE: NON toccare niente. Mani lontane.
+  (nessun report)
+
+--- TOUCH: Trascina il dito LENTAMENTE da alto-sx a basso-dx.
+  t= 0.295 len= 4 | 01 00 00 00
+  t= 0.424 len= 4 | 01 00 00 03
+  t= 0.487 len= 4 | 01 00 00 04
+  t= 0.507 len= 4 | 01 00 06 00
+  t= 0.524 len= 4 | 01 00 04 04
+  t= 0.540 len= 4 | 01 00 04 00
+  t= 0.588 len= 4 | 01 00 03 03
+  t= 0.620 len= 4 | 01 00 04 03
+  t= 0.654 len= 4 | 01 00 03 00
+  t= 0.694 len= 4 | 01 00 05 03
+  t= 0.773 len= 4 | 01 00 05 00
+  t= 0.913 len= 4 | 01 00 05 04
+  t= 0.929 len= 4 | 01 00 07 04
+  t= 1.382 len= 4 | 01 00 06 04
+  t= 1.755 len= 4 | 01 00 04 06
+  t= 1.810 len= 4 | 01 00 05 05
+  t= 1.889 len= 4 | 01 00 04 05
+  t= 1.991 len= 4 | 01 00 03 04
+  t= 2.061 len= 4 | 01 00 03 05
+  t= 2.288 len= 4 | 01 00 05 07
+  => 159 reports, 20 unique, lengths={4}, report_ids=['0x01']
+
+--- TAP: Tocca e solleva il dito 5 volte (tap tap tap).
+  t= 0.455 len= 4 | 01 00 00 00
+  t= 1.601 len= 4 | 01 00 00 03
+  t= 2.239 len= 4 | 01 00 00 FD
+  => 38 reports, 3 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN1: Premi e TIENI solo BOTTONE 1. NON toccare.
+  t= 0.000 len= 4 | 01 08 00 00
+  t= 0.000 len= 4 | 01 00 00 00
+  => 3 reports, 2 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN4: Premi e TIENI solo BOTTONE 4. NON toccare.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.389 len= 4 | 01 01 00 00
+  => 2 reports, 2 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN+TOUCH: Tieni BOTTONE 1 e trascina il dito.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.191 len= 4 | 01 08 00 00
+  t= 0.735 len= 4 | 01 08 03 00
+  t= 0.815 len= 4 | 01 08 06 00
+  t= 0.835 len= 4 | 01 08 05 00
+  t= 0.915 len= 4 | 01 08 08 00
+  t= 0.931 len= 4 | 01 08 04 00
+  t= 0.955 len= 4 | 01 08 00 FD
+  t= 0.991 len= 4 | 01 08 0D 00
+  t= 1.031 len= 4 | 01 08 07 00
+  t= 1.111 len= 4 | 01 08 09 03
+  t= 1.127 len= 4 | 01 08 0A 03
+  t= 1.283 len= 4 | 01 08 08 05
+  t= 1.303 len= 4 | 01 08 0D 03
+  t= 1.323 len= 4 | 01 08 0C 00
+  t= 1.499 len= 4 | 01 08 06 03
+  t= 1.515 len= 4 | 01 08 0A 04
+  t= 1.539 len= 4 | 01 08 10 06
+  t= 1.555 len= 4 | 01 08 0D 06
+  t= 1.595 len= 4 | 01 08 05 03
+  t= 1.811 len= 4 | 01 08 00 03
+  t= 2.219 len= 4 | 01 08 00 FC
+  t= 2.284 len= 4 | 01 08 04 FD
+  t= 2.651 len= 4 | 01 08 04 FB
+  t= 2.691 len= 4 | 01 08 03 FC
+  t= 2.963 len= 4 | 01 08 FC 00
+  t= 3.027 len= 4 | 01 08 FD 03
+  t= 3.043 len= 4 | 01 08 00 04
+  t= 3.067 len= 4 | 01 08 FB 03
+  t= 3.103 len= 4 | 01 08 FC 05
+  t= 3.183 len= 4 | 01 08 FD 04
+  t= 3.339 len= 4 | 01 08 FD 00
+  t= 3.711 len= 4 | 01 08 FC 03
+  => 172 reports, 33 unique, lengths={4}, report_ids=['0x01']
+
+============================================================
+INTERFACE [3] POINTER (usage_page=0x0001 usage=0x0001 iface=0)
+============================================================
+
+--- IDLE: NON toccare niente. Mani lontane.
+  (nessun report)
+
+--- TOUCH: Trascina il dito LENTAMENTE da alto-sx a basso-dx.
+  t= 0.591 len= 4 | 01 00 00 00
+  t= 0.670 len= 4 | 01 00 00 03
+  t= 0.785 len= 4 | 01 00 00 04
+  t= 0.841 len= 4 | 01 00 03 03
+  t= 0.877 len= 4 | 01 00 03 04
+  t= 0.927 len= 4 | 01 00 05 03
+  t= 1.033 len= 4 | 01 00 04 00
+  t= 1.057 len= 4 | 01 00 04 03
+  t= 1.113 len= 4 | 01 00 03 00
+  t= 1.973 len= 4 | 01 00 05 00
+  t= 2.597 len= 4 | 01 00 06 03
+  t= 2.705 len= 4 | 01 00 00 05
+  t= 2.913 len= 4 | 01 00 03 05
+  t= 2.949 len= 4 | 01 00 04 04
+  t= 3.060 len= 4 | 01 00 05 04
+  => 227 reports, 15 unique, lengths={4}, report_ids=['0x01']
+
+--- TAP: Tocca e solleva il dito 5 volte (tap tap tap).
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.852 len= 4 | 01 00 03 03
+  t= 3.699 len= 4 | 01 00 00 05
+  => 59 reports, 3 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN1: Premi e TIENI solo BOTTONE 1. NON toccare.
+  t= 0.570 len= 4 | 01 08 00 00
+  => 1 reports, 1 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN4: Premi e TIENI solo BOTTONE 4. NON toccare.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.466 len= 4 | 01 01 00 00
+  => 2 reports, 2 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN+TOUCH: Tieni BOTTONE 1 e trascina il dito.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.610 len= 4 | 01 08 00 00
+  t= 1.539 len= 4 | 01 08 03 00
+  t= 1.595 len= 4 | 01 08 04 00
+  t= 1.744 len= 4 | 01 08 05 00
+  t= 1.872 len= 4 | 01 08 00 03
+  t= 1.931 len= 4 | 01 08 06 00
+  t= 2.554 len= 4 | 01 08 06 03
+  t= 3.019 len= 4 | 01 08 07 00
+  t= 3.147 len= 4 | 01 08 09 03
+  t= 3.160 len= 4 | 01 08 0A 00
+  t= 3.188 len= 4 | 01 08 06 05
+  t= 3.331 len= 4 | 01 08 03 03
+  t= 3.437 len= 4 | 01 08 05 04
+  t= 3.449 len= 4 | 01 08 09 00
+  t= 3.471 len= 4 | 01 08 08 00
+  t= 3.583 len= 4 | 01 08 07 03
+  t= 3.696 len= 4 | 01 08 04 03
+  t= 3.779 len= 4 | 01 08 08 03
+  t= 3.988 len= 4 | 01 08 07 04
+  => 132 reports, 20 unique, lengths={4}, report_ids=['0x01']
+
+============================================================
+INTERFACE [4] PEN (usage_page=0x000D usage=0x0001 iface=0)
+============================================================
+
+--- IDLE: NON toccare niente. Mani lontane.
+  (nessun report)
+
+--- TOUCH: Trascina il dito LENTAMENTE da alto-sx a basso-dx.
+  t= 0.540 len= 4 | 01 00 00 00
+  t= 0.700 len= 4 | 01 00 00 03
+  t= 0.738 len= 4 | 01 00 04 00
+  t= 0.796 len= 4 | 01 00 03 00
+  t= 0.951 len= 4 | 01 00 03 03
+  t= 1.064 len= 4 | 01 00 06 00
+  t= 1.125 len= 4 | 01 00 04 03
+  t= 1.251 len= 4 | 01 00 00 04
+  t= 1.675 len= 4 | 01 00 04 04
+  t= 1.843 len= 4 | 01 00 05 00
+  t= 2.295 len= 4 | 01 00 00 05
+  t= 2.333 len= 4 | 01 00 03 04
+  t= 2.424 len= 4 | 01 00 05 04
+  t= 3.276 len= 4 | 01 00 05 03
+  t= 4.499 len= 4 | 01 00 06 05
+  => 230 reports, 15 unique, lengths={4}, report_ids=['0x01']
+
+--- TAP: Tocca e solleva il dito 5 volte (tap tap tap).
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.000 len= 4 | 01 00 03 03
+  t= 0.000 len= 4 | 01 00 03 00
+  t= 0.000 len= 4 | 01 00 00 03
+  t= 2.186 len= 4 | 01 00 00 FD
+  => 50 reports, 5 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN1: Premi e TIENI solo BOTTONE 1. NON toccare.
+  t= 0.430 len= 4 | 01 08 00 00
+  => 1 reports, 1 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN4: Premi e TIENI solo BOTTONE 4. NON toccare.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.514 len= 4 | 01 01 00 00
+  => 2 reports, 2 unique, lengths={4}, report_ids=['0x01']
+
+--- BTN+TOUCH: Tieni BOTTONE 1 e trascina il dito.
+  t= 0.000 len= 4 | 01 00 00 00
+  t= 0.545 len= 4 | 01 08 00 00
+  t= 1.390 len= 4 | 01 08 04 00
+  t= 1.416 len= 4 | 01 08 03 00
+  t= 1.433 len= 4 | 01 08 00 FD
+  t= 1.559 len= 4 | 01 08 05 00
+  t= 1.686 len= 4 | 01 08 07 00
+  t= 2.207 len= 4 | 01 08 07 03
+  t= 2.232 len= 4 | 01 08 06 00
+  t= 2.645 len= 4 | 01 08 05 04
+  t= 2.676 len= 4 | 01 08 08 03
+  t= 2.694 len= 4 | 01 08 07 04
+  t= 2.808 len= 4 | 01 08 03 03
+  t= 3.295 len= 4 | 01 08 04 FD
+  t= 3.687 len= 4 | 01 08 05 03
+  => 142 reports, 15 unique, lengths={4}, report_ids=['0x01']
