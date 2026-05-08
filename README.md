@@ -25,7 +25,7 @@ Wacom CTH-460 ──USB HID──> kaoss.py ──IAC Driver──> Ableton Live
 ### From source (CLI)
 
 ```bash
-git clone https://github.com/YOUR_USER/wacom-kaoss.git
+git clone https://github.com/fedepaj/wacom-kaoss.git
 cd wacom-kaoss
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -34,14 +34,14 @@ python kaoss.py
 
 ### macOS Menu Bar App
 
-Build and install:
+Download `WacomKaoss.app` from [Releases](https://github.com/fedepaj/wacom-kaoss/releases) and move it to `/Applications/`.
+
+Or build from source:
 
 ```bash
 ./build.sh
 cp -r dist/WacomKaoss.app /Applications/
 ```
-
-Add to **System Settings > General > Login Items** for auto-start.
 
 > First launch: macOS may show a Gatekeeper warning. Right-click > Open > Open to bypass.
 
@@ -51,19 +51,19 @@ Add to **System Settings > General > Login Items** for auto-start.
 2. Press **Cmd+M** (MIDI Map Mode)
 3. Click a parameter (e.g. Auto Filter Frequency)
 4. Touch the Wacom — Ableton captures the CC
-5. Press **Cmd+M** again to exit
+5. Press **Cmd+M** again to exit mapping mode **before** lifting your finger, otherwise it registers the release CC too
 
 ## MIDI CC Reference
 
-Each layer has independent gate CCs per finger (sent on touch/release: 127 = touch, 0 = release).
+5 layers, each with 2 independent XY finger pairs and per-layer gate CCs (127 = touch, 0 = release). Map them to whatever you want.
 
-| Layer | Button | Finger 0 X/Y | Finger 1 X/Y | Gate F0 | Gate F1 | Effect |
-|-------|--------|--------------|--------------|---------|---------|--------|
-| Base  | —      | CC 20/21     | CC 22/23     | CC 30   | CC 31   | Auto Filter |
-| 1     | btn1   | CC 24/25     | CC 26/27     | CC 42   | CC 43   | Beat Repeat |
-| 2     | btn2   | CC 28/29     | CC 32/33     | CC 44   | CC 45   | Ping Pong Delay |
-| 3     | btn3   | CC 34/35     | CC 36/37     | CC 46   | CC 47   | Reverb |
-| 4     | btn4   | CC 38/39     | CC 40/41     | CC 48   | CC 49   | Redux |
+| Layer | Button | Finger 0 X/Y | Finger 1 X/Y | Gate F0 | Gate F1 |
+|-------|--------|--------------|--------------|---------|---------|
+| Base  | —      | CC 20/21     | CC 22/23     | CC 30   | CC 31   |
+| 1     | btn1   | CC 24/25     | CC 26/27     | CC 42   | CC 43   |
+| 2     | btn2   | CC 28/29     | CC 32/33     | CC 44   | CC 45   |
+| 3     | btn3   | CC 34/35     | CC 36/37     | CC 46   | CC 47   |
+| 4     | btn4   | CC 38/39     | CC 40/41     | CC 48   | CC 49   |
 
 All CCs on MIDI Channel 1. Filter cutoffs (CC 20, 22) use exponential curves for better low-end resolution.
 
