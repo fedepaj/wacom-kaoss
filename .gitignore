@@ -2,10 +2,10 @@
 __pycache__/
 *.pyc
 *.log
-*.txt
-!requirements.txt
 .DS_Store
+.old/
+
+# PyInstaller
 build/
 dist/
 *.spec
-*.egg-info/

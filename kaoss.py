@@ -2,8 +2,8 @@
 """
 Wacom Kaoss Pad — Turn a Wacom CTH-460 into a Kaoss Pad for Ableton Live.
 
-2 fingers, independent XY CC pairs. ExpressKeys switch layers.
-Uses hidapi (no sudo needed).
+2 fingers, independent XY CC pairs. ExpressKeys switch 5 effect layers.
+Uses hidapi (no sudo). Auto-reconnects. EMA smoothing + grace period.
 
 Usage: python kaoss.py
 """
@@ -17,72 +17,71 @@ import time
 import hid
 import rtmidi
 
-from config import (
-    WACOM_VID, WACOM_PID,
-    TOUCH_X_MAX, TOUCH_Y_MAX,
-    MIDI_CHANNEL, TOUCH_GATE_CC,
-    LAYERS, BUTTON_MASK, CURVES, EXP_CURVE_POWER,
-)
+# ─── Config ──────────────────────────────────────────
 
-running = True
+WACOM_VID = 0x056A
+WACOM_PID = 0x00D1  # CTH-460 Bamboo Pen & Touch
+
+TOUCH_X_MAX = 480
+TOUCH_Y_MAX = 320
+
+MIDI_CHANNEL = 0  # Channel 1
+
+LAYERS = {
+    'base': {
+        'name': 'Auto Filter',
+        'f0': {'cc_x': 20, 'cc_y': 21},
+        'f1': {'cc_x': 22, 'cc_y': 23},
+        'gate': [30, 31],
+    },
+    'btn1': {
+        'name': 'Beat Repeat',
+        'f0': {'cc_x': 24, 'cc_y': 25},
+        'f1': {'cc_x': 26, 'cc_y': 27},
+        'gate': [42, 43],
+    },
+    'btn2': {
+        'name': 'Ping Pong Delay',
+        'f0': {'cc_x': 28, 'cc_y': 29},
+        'f1': {'cc_x': 32, 'cc_y': 33},
+        'gate': [44, 45],
+    },
+    'btn3': {
+        'name': 'Reverb',
+        'f0': {'cc_x': 34, 'cc_y': 35},
+        'f1': {'cc_x': 36, 'cc_y': 37},
+        'gate': [46, 47],
+    },
+    'btn4': {
+        'name': 'Redux',
+        'f0': {'cc_x': 38, 'cc_y': 39},
+        'f1': {'cc_x': 40, 'cc_y': 41},
+        'gate': [48, 49],
+    },
+}
+
+BUTTON_MASK = {
+    'btn1': 0x08,
+    'btn2': 0x04,
+    'btn3': 0x02,
+    'btn4': 0x01,
+}
+
+# Response curves: exponential for filter cutoffs, linear for the rest
+EXP_CURVES = {20, 22}
+EXP_POWER = 2.0
+
+# Smoothing / error correction
+EMA_ALPHA = 0.3          # 0.0 = full smoothing, 1.0 = no smoothing
+CC_THRESHOLD = 2          # minimum CC change to send
+GRACE_CYCLES = 8          # missed read cycles before releasing (8 * 50ms = 400ms)
+READ_TIMEOUT_MS = 50
 
 
-def signal_handler(sig, frame):
-    global running
-    running = False
-
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-
-# ─── USB via hidapi ──────────────────────────────────
-
-def open_wacom():
-    """Find CTH-460, open iface=0 for init, iface=1 for touch read."""
-    devices = hid.enumerate(WACOM_VID, 0)
-    if not devices:
-        devices = [d for d in hid.enumerate() if d["vendor_id"] == WACOM_VID]
-    if not devices:
-        print("  Wacom non trovato! Collegalo via USB.")
-        sys.exit(1)
-
-    iface0_path = None
-    iface1_path = None
-    for d in devices:
-        if d["interface_number"] == 0 and iface0_path is None:
-            iface0_path = d["path"]
-        elif d["interface_number"] == 1 and iface1_path is None:
-            iface1_path = d["path"]
-
-    if not iface0_path or not iface1_path:
-        print("  Errore: non trovo entrambe le interfacce USB.")
-        sys.exit(1)
-
-    # Init touch via iface=0
-    dev_init = hid.device()
-    dev_init.open_path(iface0_path)
-    try:
-        dev_init.send_feature_report(bytes([0x02, 0x02]))
-        print("  Touch initialized (mode 2)")
-    except IOError:
-        try:
-            dev_init.send_feature_report(bytes([0x02, 0x03]))
-            print("  Touch initialized (mode 3)")
-        except IOError as e:
-            print(f"  WARNING: touch init failed: {e}")
-    dev_init.close()
-
-    # Open iface=1 for reading
-    dev = hid.device()
-    dev.open_path(iface1_path)
-    dev.set_nonblocking(True)
-    print("  Touch interface open")
-    return dev
-
+# ─── Parsing ─────────────────────────────────────────
 
 def parse_touch(data):
-    """Parse 20-byte Bamboo touch report."""
+    """Parse 20-byte Bamboo touch report → (finger0, finger1, buttons)."""
     if len(data) < 20 or data[0] != 0x02:
         return None, None, 0
 
@@ -100,151 +99,295 @@ def parse_touch(data):
         else:
             fingers.append((False, 0, 0))
 
-    buttons = status & 0x0F
-    return fingers[0], fingers[1], buttons
+    return fingers[0], fingers[1], status & 0x0F
 
 
-# ─── MIDI ─────────────────────────────────────────────
-
-def open_midi():
-    midi = rtmidi.MidiOut()
-    ports = midi.get_ports()
-    print(f"  MIDI ports: {ports}")
-
-    target_idx = None
-    for i, name in enumerate(ports):
-        if "IAC" in name:
-            target_idx = i
-            break
-
-    if target_idx is None:
-        print("\n  IAC Driver non trovato!")
-        print("  Apri 'Audio MIDI Setup' > 'MIDI Studio' > abilita 'IAC Driver'")
-        sys.exit(1)
-
-    midi.open_port(target_idx)
-    print(f"  MIDI output: {ports[target_idx]}")
-    return midi
+def apply_curve(norm, cc):
+    if cc in EXP_CURVES:
+        return int(math.pow(norm, EXP_POWER) * 127)
+    return int(norm * 127)
 
 
-def send_cc(midi, cc, value):
-    midi.send_message([0xB0 | MIDI_CHANNEL, cc, max(0, min(127, value))])
-
-
-# ─── MAPPING ─────────────────────────────────────────
-
-def apply_curve(value_normalized, cc):
-    curve = CURVES.get(cc, 'linear')
-    if curve == 'exponential':
-        mapped = math.pow(value_normalized, EXP_CURVE_POWER)
-    else:
-        mapped = value_normalized
-    return int(mapped * 127)
-
-
-def get_active_layer(buttons):
-    for btn_name, mask in BUTTON_MASK.items():
+def get_layer(buttons):
+    for name, mask in BUTTON_MASK.items():
         if buttons & mask:
-            return btn_name
+            return name
     return 'base'
 
 
-# ─── MAIN ────────────────────────────────────────────
+# ─── Bridge ──────────────────────────────────────────
+
+class Bridge:
+    """Wacom USB -> MIDI bridge with auto-reconnect and smoothing."""
+
+    SCANNING = 'scanning'
+    CONNECTED = 'connected'
+    ERROR = 'error'
+
+    def __init__(self, on_status=None, on_log=None):
+        self.on_status = on_status
+        self.on_log = on_log
+        self.running = True
+        self.status = self.SCANNING
+        self._dev = None
+        self._midi = None
+        self._reset_touch_state()
+
+    def _reset_touch_state(self):
+        self._was_touching = [False, False]
+        self._ema = [{'x': None, 'y': None}, {'x': None, 'y': None}]
+        self._last_sent = [{'x': -1, 'y': -1}, {'x': -1, 'y': -1}]
+        self._last_layer = 'base'
+
+    def log(self, msg):
+        if self.on_log:
+            self.on_log(msg)
+        else:
+            print(f"  {msg}")
+
+    def _set_status(self, status):
+        self.status = status
+        if self.on_status:
+            self.on_status(status)
+
+    # ─── Main loop ───────────────────────────────────
+
+    def run(self):
+        """Blocks until stop()."""
+        while self.running:
+            if self._midi is None:
+                self._midi = self._open_midi()
+                if self._midi is None:
+                    self._set_status(self.ERROR)
+                    self._sleep(5)
+                    continue
+
+            self._set_status(self.SCANNING)
+            dev = self._try_connect()
+            if dev is None:
+                self._sleep(2)
+                continue
+
+            self._dev = dev
+            self._set_status(self.CONNECTED)
+            self._read_loop()
+            self._close_device()
+
+            if self.running:
+                self.log("Device lost, scanning...")
+
+        self._cleanup()
+
+    def stop(self):
+        self.running = False
+
+    def _sleep(self, seconds):
+        end = time.time() + seconds
+        while self.running and time.time() < end:
+            time.sleep(0.1)
+
+    # ─── USB ─────────────────────────────────────────
+
+    def _try_connect(self):
+        try:
+            devices = hid.enumerate(WACOM_VID, 0)
+            if not devices:
+                devices = [d for d in hid.enumerate() if d['vendor_id'] == WACOM_VID]
+            if not devices:
+                return None
+
+            iface0 = [d['path'] for d in devices if d['interface_number'] == 0]
+            iface1 = [d['path'] for d in devices if d['interface_number'] == 1]
+            if not iface0 or not iface1:
+                return None
+
+            # Init touch on iface 0
+            for path in iface0:
+                try:
+                    d = hid.device()
+                    d.open_path(path)
+                    try:
+                        d.send_feature_report(bytes([0x02, 0x02]))
+                        self.log("Touch init OK")
+                    except IOError:
+                        try:
+                            d.send_feature_report(bytes([0x02, 0x03]))
+                            self.log("Touch init OK (mode 3)")
+                        except IOError:
+                            pass
+                    d.close()
+                    break
+                except OSError:
+                    continue
+
+            # Open iface 1 for reading
+            for path in iface1:
+                try:
+                    d = hid.device()
+                    d.open_path(path)
+                    d.set_nonblocking(True)
+                    self.log("Data interface open")
+                    return d
+                except OSError:
+                    continue
+
+            return None
+        except Exception as e:
+            self.log(f"Connect error: {e}")
+            return None
+
+    # ─── MIDI ────────────────────────────────────────
+
+    def _open_midi(self):
+        try:
+            midi = rtmidi.MidiOut()
+            for i, name in enumerate(midi.get_ports()):
+                if 'IAC' in name:
+                    midi.open_port(i)
+                    self.log(f"MIDI: {name}")
+                    return midi
+            self.log("IAC Driver not found — enable in Audio MIDI Setup")
+            return None
+        except Exception as e:
+            self.log(f"MIDI error: {e}")
+            return None
+
+    def _send_cc(self, cc, value):
+        if self._midi:
+            try:
+                self._midi.send_message([0xB0 | MIDI_CHANNEL, cc, max(0, min(127, value))])
+            except Exception:
+                pass
+
+    # ─── Read loop ───────────────────────────────────
+
+    def _read_loop(self):
+        no_data = [0, 0]  # per-finger grace counters
+
+        while self.running:
+            try:
+                data = self._dev.read(64, timeout_ms=READ_TIMEOUT_MS)
+            except OSError:
+                self.log("Read error — device lost")
+                return
+
+            if not data:
+                # Grace period: increment per-finger counters
+                for fi in range(2):
+                    if self._was_touching[fi]:
+                        no_data[fi] += 1
+                        if no_data[fi] >= GRACE_CYCLES:
+                            self._release_finger(fi)
+                continue
+
+            f0, f1, buttons = parse_touch(list(data))
+            if f0 is None:
+                continue
+
+            layer = get_layer(buttons)
+            cfg = LAYERS[layer]
+            prev_layer = self._last_layer
+
+            # Layer changed while touching: release on old layer, re-gate on new
+            if layer != prev_layer:
+                prev_cfg = LAYERS[prev_layer]
+                for fi in range(2):
+                    if self._was_touching[fi]:
+                        self._send_cc(prev_cfg['gate'][fi], 0)
+                        self._send_cc(cfg['gate'][fi], 127)
+
+            for fi, finger in enumerate((f0, f1)):
+                fc = cfg[f'f{fi}']
+
+                if finger[0]:  # touching
+                    no_data[fi] = 0
+                    x_norm = max(0.0, min(1.0, finger[1] / TOUCH_X_MAX))
+                    y_norm = max(0.0, min(1.0, 1.0 - finger[2] / TOUCH_Y_MAX))
+
+                    # EMA smoothing
+                    if self._ema[fi]['x'] is None:
+                        self._ema[fi]['x'] = x_norm
+                        self._ema[fi]['y'] = y_norm
+                    else:
+                        self._ema[fi]['x'] += EMA_ALPHA * (x_norm - self._ema[fi]['x'])
+                        self._ema[fi]['y'] += EMA_ALPHA * (y_norm - self._ema[fi]['y'])
+
+                    cc_x = apply_curve(self._ema[fi]['x'], fc['cc_x'])
+                    cc_y = apply_curve(self._ema[fi]['y'], fc['cc_y'])
+
+                    # Send only if changed enough (or layer switch)
+                    if abs(cc_x - self._last_sent[fi]['x']) >= CC_THRESHOLD or layer != prev_layer:
+                        self._send_cc(fc['cc_x'], cc_x)
+                        self._last_sent[fi]['x'] = cc_x
+                    if abs(cc_y - self._last_sent[fi]['y']) >= CC_THRESHOLD or layer != prev_layer:
+                        self._send_cc(fc['cc_y'], cc_y)
+                        self._last_sent[fi]['y'] = cc_y
+
+                    if not self._was_touching[fi]:
+                        self._send_cc(cfg['gate'][fi], 127)
+                        self._was_touching[fi] = True
+
+                else:  # not touching in this report
+                    if self._was_touching[fi]:
+                        no_data[fi] += 1
+                        if no_data[fi] >= GRACE_CYCLES:
+                            self._release_finger(fi)
+
+            self._last_layer = layer
+
+    def _release_finger(self, fi):
+        cfg = LAYERS[self._last_layer]
+        self._send_cc(cfg['gate'][fi], 0)
+        self._was_touching[fi] = False
+        self._ema[fi] = {'x': None, 'y': None}
+        self._last_sent[fi] = {'x': -1, 'y': -1}
+
+    # ─── Cleanup ─────────────────────────────────────
+
+    def _close_device(self):
+        if self._dev:
+            try:
+                self._dev.close()
+            except Exception:
+                pass
+            self._dev = None
+        self._reset_touch_state()
+
+    def _cleanup(self):
+        for fi in range(2):
+            if self._was_touching[fi]:
+                cfg = LAYERS[self._last_layer]
+                self._send_cc(cfg['gate'][fi], 0)
+        self._close_device()
+        if self._midi:
+            try:
+                self._midi.close_port()
+            except Exception:
+                pass
+            self._midi = None
+
+
+# ─── CLI ─────────────────────────────────────────────
 
 def main():
     print()
-    print("  ╔═══════════════════════════════════╗")
-    print("  ║       WACOM KAOSS PAD             ║")
-    print("  ╚═══════════════════════════════════╝")
+    print("  WACOM KAOSS PAD")
+    print("  ───────────────")
     print()
 
-    dev = open_wacom()
-    midi = open_midi()
-    print()
+    bridge = Bridge(
+        on_status=lambda s: print(f"  [{s}]"),
+    )
 
-    was_touching = [False, False]
-    last_cc = [{'x': -1, 'y': -1}, {'x': -1, 'y': -1}]
-    last_layer = 'base'
+    def on_signal(sig, frame):
+        bridge.stop()
 
-    print("  Ready! Ctrl+C per uscire.\n")
-    print(f"  {'LAYER':<18} {'F0 X':>5} {'Y':>5} {'CCx=v':>7} {'CCy=v':>7}  "
-          f"{'F1 X':>5} {'Y':>5} {'CCx=v':>7} {'CCy=v':>7}")
-    print("  " + "-" * 80)
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
 
-    no_data_count = 0
-
-    while running:
-        data = dev.read(64, timeout_ms=50)
-
-        if not data:
-            no_data_count += 1
-            # After ~100ms of no data, consider fingers lifted
-            if no_data_count > 2:
-                for fi in range(2):
-                    if was_touching[fi]:
-                        send_cc(midi, TOUCH_GATE_CC[fi], 0)
-                        was_touching[fi] = False
-                        last_cc[fi] = {'x': -1, 'y': -1}
-            continue
-
-        no_data_count = 0
-
-        finger0, finger1, buttons = parse_touch(list(data))
-        if finger0 is None:
-            continue
-
-        layer = get_active_layer(buttons)
-        layer_cfg = LAYERS[layer]
-        fingers = [finger0, finger1]
-        display_parts = [f"  {layer_cfg['name']:<18}"]
-
-        for fi in range(2):
-            finger = fingers[fi]
-            f_cfg = layer_cfg[f'f{fi}']
-            cc_x_num = f_cfg['cc_x']
-            cc_y_num = f_cfg['cc_y']
-
-            if finger[0]:  # Touch active
-                x_raw, y_raw = finger[1], finger[2]
-                x_norm = max(0.0, min(1.0, x_raw / TOUCH_X_MAX))
-                y_norm = max(0.0, min(1.0, 1.0 - (y_raw / TOUCH_Y_MAX)))
-
-                cc_x_val = apply_curve(x_norm, cc_x_num)
-                cc_y_val = apply_curve(y_norm, cc_y_num)
-
-                if cc_x_val != last_cc[fi]['x'] or layer != last_layer:
-                    send_cc(midi, cc_x_num, cc_x_val)
-                    last_cc[fi]['x'] = cc_x_val
-                if cc_y_val != last_cc[fi]['y'] or layer != last_layer:
-                    send_cc(midi, cc_y_num, cc_y_val)
-                    last_cc[fi]['y'] = cc_y_val
-
-                if not was_touching[fi]:
-                    send_cc(midi, TOUCH_GATE_CC[fi], 127)
-                    was_touching[fi] = True
-
-                display_parts.append(
-                    f"{x_raw:>5} {y_raw:>5} "
-                    f"CC{cc_x_num:>2}={cc_x_val:<3} CC{cc_y_num:>2}={cc_y_val:<3} ")
-            else:
-                if was_touching[fi]:
-                    send_cc(midi, TOUCH_GATE_CC[fi], 0)
-                    was_touching[fi] = False
-                    last_cc[fi] = {'x': -1, 'y': -1}
-                display_parts.append(f"{'---':>5} {'---':>5} {'':>7} {'':>7} ")
-
-        last_layer = layer
-        print(f"\r{''.join(display_parts)}", end="", flush=True)
-
-    # Cleanup
-    print("\n\n  Shutting down...")
-    for fi in range(2):
-        if was_touching[fi]:
-            send_cc(midi, TOUCH_GATE_CC[fi], 0)
-    midi.close_port()
-    dev.close()
-    print("  Done.")
+    bridge.run()
+    print("\n  Done.")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
